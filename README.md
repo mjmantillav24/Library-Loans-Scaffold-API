@@ -30,29 +30,53 @@ Swagger UI: `http://localhost:3000/api/docs`
 
 ## Credenciales de prueba
 
-No hay script de seed. Crea un usuario administrador mediante la API:
+No hay script de seed. Crea un usuario mediante la API:
 
 ```bash
-# Registrar usuario admin
+# 1. Registrar usuario
 curl -X POST http://localhost:3000/api/auth/register \
   -H "Content-Type: application/json" \
   -d '{
     "email": "admin@library.com",
     "password": "Admin1234",
     "firstName": "Admin",
-    "lastName": "Library",
-    "role": "admin"
+    "lastName": "Library"
   }'
 ```
 
-La respuesta incluye el `accessToken`. Úsalo en el header `Authorization: Bearer <token>` para el resto de endpoints.
+La respuesta incluye `accessToken` y `refreshToken`:
+```json
+{
+  "accessToken": "<jwt-de-15m>",
+  "refreshToken": "<jwt-de-7d>",
+  "user": { "id": "...", "email": "admin@library.com", "role": "member", ... }
+}
+```
+
+Usa `Authorization: Bearer <accessToken>` para los endpoints protegidos.
 
 ```bash
-# Login
+# 2. Login
 curl -X POST http://localhost:3000/api/auth/login \
   -H "Content-Type: application/json" \
   -d '{ "email": "admin@library.com", "password": "Admin1234" }'
+
+# 3. Renovar access token (cuando expire a los 15m)
+curl -X POST http://localhost:3000/api/auth/refresh \
+  -H "Content-Type: application/json" \
+  -d '{ "refreshToken": "<tu-refresh-token>" }'
+
+# 4. Cerrar sesión (revoca el refresh token)
+curl -X POST http://localhost:3000/api/auth/logout \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <tu-access-token>" \
+  -d '{ "refreshToken": "<tu-refresh-token>" }'
 ```
+
+> Para cambiar el rol de un usuario a `admin` o `librarian`, actualízalo directamente en la BD:
+> ```sql
+> UPDATE users SET role = 'admin' WHERE email = 'admin@library.com';
+> ```
 
 ---
 
@@ -100,6 +124,8 @@ Copia `.env.example` a `.env` y ajusta los valores:
 |---|---|---|---|
 | POST | `/api/auth/register` | Registrar usuario | Público |
 | POST | `/api/auth/login` | Login | Público |
+| POST | `/api/auth/refresh` | Renovar access token con refresh token | Público |
+| POST | `/api/auth/logout` | Revocar refresh token | JWT |
 | GET | `/api/auth/me` | Perfil del usuario autenticado | JWT |
 
 ### Items
@@ -156,7 +182,10 @@ Los préstamos que superan su `dueAt` **no cambian de estado automáticamente** 
 
 ## Bonos implementados
 
-No se implementaron características adicionales más allá de los requisitos del enunciado.
+| Bono | Descripción |
+|---|---|
+| **B2 — Refresh tokens stateful (+5%)** | Entidad `RefreshToken` persistida en BD. Login/register devuelven `{ accessToken, refreshToken }`. `POST /auth/refresh` valida firma + lookup en BD (existencia, no revocado, no expirado). `POST /auth/logout` marca `revokedAt = now()`. Secretos independientes `JWT_ACCESS_SECRET` y `JWT_REFRESH_SECRET`. |
+| **B3 — Pipeline GitHub Actions (+4% +1%)** | `.github/workflows/ci.yml` ejecuta en push y PR a main: checkout, Node 20, `npm ci`, lint, tests unitarios con Postgres efímero. Incluye `docker build` para el +1% adicional. |
 
 ---
 

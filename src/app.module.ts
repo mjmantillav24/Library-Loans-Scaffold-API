@@ -9,6 +9,7 @@ import { ItemsModule } from './modules/items/items.module';
 import { LoansModule } from './modules/loans/loans.module';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { User } from './modules/auth/entities/user.entity';
+import { RefreshToken } from './modules/auth/entities/refresh-token.entity';
 import { Item } from './modules/items/entities/item.entity';
 import { Loan } from './modules/loans/entities/loan.entity';
 import { validationSchema } from './config/validation.schema';
@@ -32,7 +33,7 @@ import { validationSchema } from './config/validation.schema';
         database: config.get('DB_NAME'),
         synchronize: config.get<boolean>('DB_SYNCHRONIZE', false),
         logging: config.get<boolean>('DB_LOGGING', false),
-        entities: [User, Item, Loan],
+        entities: [User, RefreshToken, Item, Loan],
         migrations: ['dist/database/migrations/*.js'],
       }),
     }),
