@@ -1,35 +1,48 @@
+import appConfig from './config/configuration';
 import { Module } from '@nestjs/common';
+import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
+import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule, ConfigService } from '@nestjs/config';
-import { TypeOrmModule, TypeOrmModuleOptions } from '@nestjs/typeorm';
-import configuration from './config/configuration';
+import { ClassSerializerInterceptor } from '@nestjs/common';
+import { AuthModule } from './modules/auth/auth.module';
+import { ItemsModule } from './modules/items/items.module';
+import { LoansModule } from './modules/loans/loans.module';
+import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
+import { User } from './modules/auth/entities/user.entity';
+import { Item } from './modules/items/entities/item.entity';
+import { Loan } from './modules/loans/entities/loan.entity';
 import { validationSchema } from './config/validation.schema';
-import { HealthModule } from './modules/health/health.module';
 
 @Module({
   imports: [
+    // Usa el config y validación Joi del scaffold
     ConfigModule.forRoot({
       isGlobal: true,
-      load: [configuration],
+      load: [appConfig],
       validationSchema,
-      validationOptions: {
-        abortEarly: false,
-      },
     }),
     TypeOrmModule.forRootAsync({
       inject: [ConfigService],
-      useFactory: (config: ConfigService): TypeOrmModuleOptions => ({
+      useFactory: (config: ConfigService) => ({
         type: 'postgres',
-        host: config.get<string>('database.host'),
-        port: config.get<number>('database.port'),
-        username: config.get<string>('database.user'),
-        password: config.get<string>('database.password'),
-        database: config.get<string>('database.name'),
-        autoLoadEntities: true,
-        synchronize: config.get<boolean>('database.synchronize'),
-        logging: config.get<boolean>('database.logging'),
+        host: config.get('DB_HOST'),
+        port: config.get<number>('DB_PORT'),
+        username: config.get('DB_USER'),
+        password: config.get('DB_PASSWORD'),
+        database: config.get('DB_NAME'),
+        synchronize: config.get<boolean>('DB_SYNCHRONIZE', false),
+        logging: config.get<boolean>('DB_LOGGING', false),
+        entities: [User, Item, Loan],
+        migrations: ['dist/database/migrations/*.js'],
       }),
     }),
-    HealthModule,
+    AuthModule,
+    ItemsModule,
+    LoansModule,
+  ],
+  providers: [
+    { provide: APP_GUARD, useClass: JwtAuthGuard },
+    { provide: APP_INTERCEPTOR, useClass: ClassSerializerInterceptor },
   ],
 })
 export class AppModule {}
