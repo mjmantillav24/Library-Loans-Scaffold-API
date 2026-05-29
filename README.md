@@ -1,125 +1,185 @@
-# Library Loans API — Scaffold de examen parcial
+# Library Loans API
 
-Scaffold base para el examen parcial del curso **ISIS 3710 — Programación con Tecnologías Web**.
+REST API para gestión de préstamos de biblioteca. Construida con **NestJS 10**, **TypeORM**, **PostgreSQL 16** y autenticación **JWT**.
 
-> Este repositorio es el **punto de partida**. El enunciado completo será compartido durante el examen. El proyecto de referencia (con patrones aplicados) es [MediTrack](https://github.com/wareval0/MediTrack-API).
+---
 
-## Qué incluye este scaffold
-
-- **NestJS 10** inicializado.
-- **Docker Compose** con Postgres 16-alpine.
-- **`ConfigModule`** con validación Joi al arranque (todas las variables requeridas están en `.env.example`).
-- **`ValidationPipe`** global con `whitelist`, `forbidNonWhitelisted`, `transform`.
-- **Swagger UI** montado en `/api/docs`.
-- **Módulo `health`** con `/api/health/live` y `/api/health/ready` como referencia mínima de un módulo NestJS.
-- **`@Public()` decorator** en [src/common/decorators/public.decorator.ts](src/common/decorators/public.decorator.ts) listo para usar cuando implementes auth.
-- **CLI de TypeORM** configurado en [src/database/data-source.ts](src/database/data-source.ts) — corre `npm run migration:generate` para crear migraciones.
-
-## Qué NO incluye (lo implementas tú)
-
-- Módulo `auth` (entidad `User`, register, login, JWT strategy, guards).
-- Entidades `Item` y `Loan`.
-- Cualquier migración.
-- Tests.
-
-Ver el enunciado para los pesos exactos de cada parte.
-
-## Arranque rápido
+## Arranque completo
 
 ```bash
-# 1) Variables de entorno
+# 1. Variables de entorno
 cp .env.example .env
 
-# 2) Base de datos
-docker compose up -d
+# 2. Levantar base de datos (limpio)
+docker compose down -v && docker compose up -d
 
-# 3) Dependencias
+# 3. Instalar dependencias
 npm install
 
-# 4) Build
-npm run build
+# 4. Aplicar migraciones
+npm run migration:run
 
-# 5) Arrancar la app en modo desarrollo
+# 5. Arrancar en modo desarrollo
 npm run start:dev
 ```
 
-Abre [http://localhost:3000/api/docs](http://localhost:3000/api/docs) y deberías ver el Swagger UI con el módulo `health` ya disponible.
+La app queda disponible en `http://localhost:3000`.  
+Swagger UI: `http://localhost:3000/api/docs`
+
+---
+
+## Credenciales de prueba
+
+No hay script de seed. Crea un usuario administrador mediante la API:
+
+```bash
+# Registrar usuario admin
+curl -X POST http://localhost:3000/api/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{
+    "email": "admin@library.com",
+    "password": "Admin1234",
+    "firstName": "Admin",
+    "lastName": "Library",
+    "role": "admin"
+  }'
+```
+
+La respuesta incluye el `accessToken`. Úsalo en el header `Authorization: Bearer <token>` para el resto de endpoints.
+
+```bash
+# Login
+curl -X POST http://localhost:3000/api/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{ "email": "admin@library.com", "password": "Admin1234" }'
+```
+
+---
 
 ## Scripts disponibles
 
 | Script | Descripción |
 |---|---|
-| `npm run start:dev` | Arranca con hot reload. |
-| `npm run start:prod` | Arranca el build de producción (requiere `npm run build` antes). |
-| `npm run build` | Compila TypeScript a `dist/`. |
-| `npm run lint` | ESLint con autofix. |
-| `npm run format` | Prettier. |
-| `npm test` | Tests unitarios. |
-| `npm run test:cov` | Tests con coverage. |
-| `npm run test:e2e` | Tests e2e con `jest-e2e.json`. |
-| `npm run migration:generate src/database/migrations/NombreDeLaMigracion` | Genera migración a partir del diff entre entidades y BD. |
-| `npm run migration:run` | Aplica migraciones pendientes. |
-| `npm run migration:revert` | Revierte la última migración. |
+| `npm run start:dev` | Arranca con hot reload |
+| `npm run start:prod` | Arranca el build de producción (requiere `npm run build`) |
+| `npm run build` | Compila TypeScript a `dist/` |
+| `npm test` | Tests unitarios |
+| `npm run test:cov` | Tests con reporte de cobertura |
+| `npm run migration:run` | Aplica migraciones pendientes |
+| `npm run migration:revert` | Revierte la última migración |
+| `npm run migration:generate src/database/migrations/Nombre` | Genera migración desde diff de entidades |
+| `npm run lint` | ESLint con autofix |
+| `npm run format` | Prettier |
 
-## Estructura
+---
+
+## Variables de entorno
+
+Copia `.env.example` a `.env` y ajusta los valores:
+
+| Variable | Descripción | Default |
+|---|---|---|
+| `DB_HOST` | Host de PostgreSQL | `localhost` |
+| `DB_PORT` | Puerto de PostgreSQL | `5434` |
+| `DB_USER` | Usuario de BD | `loans` |
+| `DB_PASSWORD` | Contraseña de BD | `loans` |
+| `DB_NAME` | Nombre de la BD | `loans` |
+| `JWT_ACCESS_SECRET` | Secreto JWT (≥ 32 chars) | — |
+| `JWT_ACCESS_EXPIRES_IN` | Expiración del access token | `15m` |
+| `BCRYPT_SALT_ROUNDS` | Rondas de bcrypt | `10` |
+| `MAX_ACTIVE_LOANS` | Máx. préstamos activos por usuario | `3` |
+| `DAILY_FINE_RATE` | Multa diaria por mora (USD) | `0.50` |
+| `MAX_LOAN_DAYS` | Máx. días de duración de un préstamo | `30` |
+
+---
+
+## Endpoints
+
+### Auth
+| Método | Ruta | Descripción | Auth |
+|---|---|---|---|
+| POST | `/api/auth/register` | Registrar usuario | Público |
+| POST | `/api/auth/login` | Login | Público |
+| GET | `/api/auth/me` | Perfil del usuario autenticado | JWT |
+
+### Items
+| Método | Ruta | Descripción | Auth |
+|---|---|---|---|
+| POST | `/api/items` | Crear ítem | JWT |
+| GET | `/api/items?type=` | Listar ítems (filtro opcional por tipo) | JWT |
+| GET | `/api/items/:id` | Obtener ítem por ID | JWT |
+| PATCH | `/api/items/:id` | Actualizar título o tipo | JWT |
+| DELETE | `/api/items/:id` | Soft delete (204) | JWT |
+
+### Loans
+| Método | Ruta | Descripción | Auth |
+|---|---|---|---|
+| POST | `/api/loans` | Crear préstamo | JWT |
+| GET | `/api/loans?userId=&itemId=&status=` | Listar préstamos con filtros | JWT |
+| GET | `/api/loans/:id` | Obtener préstamo por ID | JWT |
+| PATCH | `/api/loans/:id/return` | Registrar devolución y calcular multa | JWT |
+| PATCH | `/api/loans/:id/mark-lost` | Marcar préstamo como perdido | JWT |
+
+---
+
+## Reglas de negocio
+
+| Regla | Descripción |
+|---|---|
+| R1 | `dueAt` debe ser mayor que `loanedAt` y la ventana máxima es `MAX_LOAN_DAYS` días → 400 si no cumple |
+| R2 | Un ítem con préstamo `active` u `overdue` no puede prestarse → 409 con el `loanId` bloqueante |
+| R3 | Un usuario con ≥ `MAX_ACTIVE_LOANS` préstamos `active`/`overdue` no puede tomar más → 409 |
+| R4 | Al devolver: `fineAmount = daysOverdue × DAILY_FINE_RATE`, donde `daysOverdue = max(0, ceil((returnedAt − dueAt) / 1 día))` |
+| R5 | `returned` y `lost` son estados terminales. Intentar devolver o perder desde esos estados → 400 |
+
+### Máquina de estados de préstamos (FSM)
 
 ```
-library-loans-scaffold/
-├── docker-compose.yml          # Postgres 16-alpine
-├── .env.example                # plantilla de variables (cópiala a .env)
-├── package.json
-├── tsconfig.json
-├── nest-cli.json
-├── src/
-│   ├── main.ts                 # bootstrap: ValidationPipe + Swagger + /api prefix
-│   ├── app.module.ts           # ConfigModule + TypeOrmModule + HealthModule
-│   ├── config/
-│   │   ├── configuration.ts    # AppConfig interface + factory
-│   │   └── validation.schema.ts # Joi schema
-│   ├── database/
-│   │   ├── data-source.ts      # DataSource para CLI de TypeORM
-│   │   └── migrations/         # (vacío — aquí van tus migraciones)
-│   ├── common/
-│   │   └── decorators/
-│   │       └── public.decorator.ts
-│   └── modules/
-│       └── health/
-│           ├── health.module.ts
-│           └── health.controller.ts
-└── test/
-    └── jest-e2e.json
+active ──→ returned (terminal)
+active ──→ lost     (terminal)
+active ──→ overdue
+overdue ──→ returned (terminal)
+overdue ──→ lost     (terminal)
 ```
 
-## Aliases de path
+---
 
-Configurados en `tsconfig.json` para imports limpios:
+## Decisión: transición automática a `overdue`
 
-```typescript
-import { ItemsModule } from '@modules/items/items.module';
-import { Public } from '@common/decorators/public.decorator';
-import configuration from '@config/configuration';
-import { AppDataSource } from '@database/data-source';
+**No se implementó transición automática.**
+
+Los préstamos que superan su `dueAt` **no cambian de estado automáticamente** a `overdue`. El estado `overdue` existe en la FSM y puede asignarse manualmente, pero no hay un cron job ni scheduler que lo haga en background.
+
+**Razón:** Implementar un job recurrente requeriría un módulo adicional (p. ej. `@nestjs/schedule`) fuera del alcance del examen parcial, y añadiría complejidad en los tests. La decisión de diseño es que el sistema detecta mora al momento de la devolución (R4 calcula la multa independientemente del estado) y que un operador con rol `librarian` o `admin` puede marcar manualmente los préstamos vencidos.
+
+---
+
+## Bonos implementados
+
+No se implementaron características adicionales más allá de los requisitos del enunciado.
+
+---
+
+## Estructura del proyecto
+
 ```
-
-## Configuración: variables que el scaffold ya valida
-
-El `validationSchema` de Joi exige al arranque:
-
-- `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME` (todas requeridas, sin defaults).
-- `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET` (mínimo 32 caracteres).
-- `BCRYPT_SALT_ROUNDS` (4-15, default 10).
-- `MAX_ACTIVE_LOANS` (default 3), `DAILY_FINE_RATE` (default 0.50), `MAX_LOAN_DAYS` (default 30) — usadas por las reglas de negocio que implementarás (ver enunciado §4.4).
-
-Si falta alguna requerida o no cumple el formato, la app **falla al arrancar** con un mensaje claro.
-
-## Siguiente paso
-
-Lee el enunciado completo:
-
-```bash
-open ../meditrack-api/docs/enunciado-parcial.md
+src/
+├── main.ts                        # Bootstrap: ValidationPipe global + Swagger + prefijo /api
+├── app.module.ts                  # ConfigModule + TypeOrmModule + módulos + guards globales
+├── config/
+│   ├── configuration.ts           # Factory de configuración tipada
+│   └── validation.schema.ts       # Validación Joi de variables de entorno al arranque
+├── database/
+│   ├── data-source.ts             # DataSource para CLI de TypeORM
+│   └── migrations/
+│       └── 1715000000000-initial-schema.ts
+├── common/
+│   ├── decorators/
+│   │   └── public.decorator.ts    # @Public() — omite JwtAuthGuard
+│   └── guards/
+│       └── jwt-auth.guard.ts      # Guard global con soporte a @Public()
+└── modules/
+    ├── auth/                      # Entidad User, register, login, JWT strategy
+    ├── items/                     # CRUD de ítems con soft delete
+    └── loans/                     # Préstamos con reglas R1–R5 y FSM
 ```
-
-Empieza por implementar la entidad `User` y el módulo `auth` (§4.1 del enunciado). Sin auth, los demás endpoints no se pueden probar.
-
-¡Éxitos!
